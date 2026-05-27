@@ -10,13 +10,12 @@ for integration from any language with a socket library.
 ## Prerequisites
 
 The TCP interface provides full remote control of the winch, but **one operation cannot be
-performed over TCP and must be done via the web interface or the physical transfer button before
-casting is possible:**
+performed over TCP and must be done via the web interface before casting is possible:**
 
 **Setting the data-transfer point.** This is the cable position at which the winch stops during
-recovery to allow the profiler to transfer its data. It is set physically by jogging the winch to
-the correct position and pressing the transfer button (or using the equivalent control in the web
-UI). Until this is done, `$QRYSAFEFLAG` returns `false` and any `$RUNCAST` command is rejected
+recovery to allow the profiler to transfer its data. It is set by jogging the winch to the correct
+position and pressing **Set transfer position** in the web UI (or by running the auto-set routine).
+Until this is done, `$QRYSAFEFLAG` returns `false` and any `$RUNCAST` command is rejected
 with `ERR,NOT_SAFE`.
 
 The transfer point only needs to be set once per deployment. It is retained across casts until the
