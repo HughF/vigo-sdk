@@ -271,7 +271,7 @@ def test_run_cast(client):
     if cycle != 'done':
         _warn(f'Cycle flag is "{cycle}" — cast may be rejected or unsafe')
 
-    depth = input('\n  Depth in metres (0.1–200): ').strip()
+    depth = input('\n  Depth in metres (0.1–500): ').strip()
     confirm = input(f'  Send $RUNCAST,{depth} ? [y/N]: ').strip().lower()
     if confirm != 'y':
         print('  Cancelled.')
@@ -343,7 +343,7 @@ def test_error_handling(client):
         ('$RUNCAST',               'RUNCAST — missing depth'),
         ('$RUNCAST,0',             'RUNCAST — depth zero'),
         ('$RUNCAST,-10',           'RUNCAST — negative depth'),
-        ('$RUNCAST,201',           'RUNCAST — depth above max (201)'),
+        ('$RUNCAST,501',           'RUNCAST — depth above max (501)'),
         ('$RUNCAST,abc',           'RUNCAST — non-numeric depth'),
     ]
 

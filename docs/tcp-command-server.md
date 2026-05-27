@@ -199,7 +199,7 @@ On out-of-range: `$RSP:ERR,RANGE_250_1000\r\n`
 
 ### `$RUNCAST,<depth_m>`
 
-Start a cast to the specified depth. Valid range: **0.1 – 200 m** (float accepted).
+Start a cast to the specified depth. Valid range: **0.1 – 500 m** (float accepted).
 
 The server will reject this command if the data-transfer point has not been set
 (`$QRYSAFEFLAG` returns `false`).
@@ -213,7 +213,7 @@ Possible errors:
 
 | Error | Meaning |
 |-------|---------|
-| `ERR,INVALID_DEPTH` | Depth is not a positive number or exceeds 200 m |
+| `ERR,INVALID_DEPTH` | Depth is not a positive number or exceeds 500 m |
 | `ERR,NOT_SAFE` | Transfer point has not been set; casting is locked out |
 
 ### `$ABORT`
@@ -289,7 +289,7 @@ $EVT:CYCLEFLAG,done\r\n
 | `ERR,ARG_MISSING` | A required argument was not supplied |
 | `ERR,INVALID` | The argument value is not one of the accepted options |
 | `ERR,RANGE_X_Y` | The numeric argument is outside the allowed range (X–Y) |
-| `ERR,INVALID_DEPTH` | Depth argument for `$RUNCAST` is not a valid positive number ≤ 200 m |
+| `ERR,INVALID_DEPTH` | Depth argument for `$RUNCAST` is not a valid positive number ≤ 500 m |
 | `ERR,NOT_SAFE` | `$RUNCAST` rejected because the transfer point has not been set |
 | `ERR,UNKNOWN_PROFILER` | `$SETPROFILER` argument was not a recognised profiler ID |
 
