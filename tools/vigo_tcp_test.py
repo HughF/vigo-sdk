@@ -11,6 +11,7 @@ Examples:
 """
 
 import argparse
+import json
 import queue
 import socket
 import sys
@@ -183,6 +184,7 @@ ALL_QUERIES = [
     ('$QRYWATERDEPTH', 'Water depth (m)'),
     ('$QRYCYCLES',     'Cast count'),
     ('$QRYDROPRATE',   'Drop rate (m/s)'),
+    ('$CABLEOUT',      'Cable out (m, alias)'),
 ]
 
 def test_all_queries(client):
@@ -314,6 +316,46 @@ def test_recover_all(client):
     _result('RECOVERALL', r)
 
 
+# ── Status (aggregate JSON) ───────────────────────────────────────────────────
+
+def test_status(client):
+    _header('Full status (JSON)')
+    r = client.query('$STATUS')
+    if r is None:
+        _result('STATUS', None)
+        return
+    try:
+        obj = json.loads(r)
+    except (ValueError, TypeError):
+        _result('STATUS (raw, unparsed)', r)
+        return
+    for k in sorted(obj):
+        _result(k, obj[k])
+
+
+# ── Manual pay-in / pay-out ───────────────────────────────────────────────────
+
+def test_pay_controls(client):
+    _header('Manual pay-in / pay-out')
+    step = client.query('$STEP')
+    _result('Current step (s)', step)
+    print(f'  {C.CYAN}1.{C.RESET} Set step duration')
+    print(f'  {C.CYAN}2.{C.RESET} Pay in  (one step, then auto-stop)')
+    print(f'  {C.CYAN}3.{C.RESET} Pay out (one step, then auto-stop)')
+    print(f'  {C.CYAN}4.{C.RESET} Stop (cancel any pay motion)')
+    print(f'  {C.DIM}0. Cancel{C.RESET}')
+    choice = input('  Choose: ').strip()
+    if choice == '1':
+        secs = input('  Step duration in seconds (0.05–10): ').strip()
+        _result(f'STEP,{secs}', client.query(f'$STEP,{secs}'))
+    elif choice == '2':
+        _result('PAYIN', client.query('$PAYIN'))
+    elif choice == '3':
+        _result('PAYOUT', client.query('$PAYOUT'))
+    elif choice == '4':
+        _result('STOP', client.query('$STOP'))
+
+
 # ── Error / boundary test ─────────────────────────────────────────────────────
 
 def test_error_handling(client):
@@ -345,6 +387,9 @@ def test_error_handling(client):
         ('$RUNCAST,-10',           'RUNCAST — negative depth'),
         ('$RUNCAST,501',           'RUNCAST — depth above max (501)'),
         ('$RUNCAST,abc',           'RUNCAST — non-numeric depth'),
+        ('$STEP,0',                'STEP — below min (0)'),
+        ('$STEP,11',               'STEP — above max (11)'),
+        ('$STEP,abc',              'STEP — non-numeric'),
     ]
 
     passed = 0
@@ -402,6 +447,8 @@ MENU = [
     ('Error-handling boundary tests',       test_error_handling),
     ('Watch for events',                    test_watch_events),
     ('Send raw command',                    test_raw),
+    ('Full status (JSON)',                  test_status),
+    ('Manual pay-in / pay-out',             test_pay_controls),
 ]
 
 def _print_menu():

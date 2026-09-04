@@ -102,6 +102,23 @@ All query commands take no arguments and return the current value of the named v
 | `$QRYWATERDEPTH` | float (m) | Water depth from the connected NMEA depth sounder |
 | `$QRYCYCLES` | integer | Total number of casts performed this session |
 | `$QRYDROPRATE` | float (m/s) | Effective drop rate for the current profiler |
+| `$CABLEOUT` | float (m) | Metres of cable currently deployed (alias of `$QRYMETERSOUT`) |
+
+### `$STATUS` — full machine state as JSON
+
+Returns the complete current state of the system as a single-line JSON object. Provided as a
+convenience so a client can read everything in one round-trip instead of issuing every `$QRY…`
+command individually.
+
+```
+→ $STATUS\n
+← $RSP:{"castType":"UNDERWAY","safeToCast":true,"profiler":"SWIFTSVP","stopMode":"TRANSFERPOINT","cycleFlag":"done","speedRpm":1000,"torquePct":2,"metersOut":12.7,"lastDepth":34.5,"powerW":150,"voltageV":230,"waterDepth":40,"cycles":3,"dropRate":1.1,"driveMode":"POSITION","driveStatus":"ENABLED","brake":"DISABLED","levelWind":"ENABLED","stepSeconds":1,"payStepBusy":false,"version":"2026.09.04"}\r\n
+```
+
+The JSON is always emitted on a single line (no embedded newlines), so the standard
+split-on-`\n` receive loop parses it as one message. Field meanings follow the individual
+`$QRY…` commands above; `stepSeconds` is the current pay-step duration and `payStepBusy` is
+`true` while a `$PAYIN`/`$PAYOUT` step is in progress.
 
 **Example**
 
@@ -245,6 +262,75 @@ Wind the cable fully in until the proximity switch closes (only acts when `cycle
 ← $RSP:OK\r\n
 ```
 
+### Manual pay-in / pay-out
+
+These commands nudge the winch a fixed amount in either direction, then stop automatically.
+They are intended for recovering the last few metres of cable manually — for example if the
+limit switch is unreliable — by issuing repeated short moves. Each move runs for the pay-step
+duration set by `$STEP` (default **1 s**) and then stops on its own.
+
+All three require the system to be idle (`cycleFlag` is `done`); they will not interrupt a
+running cast.
+
+#### `$STEP[,<seconds>]`
+
+Set the duration of a single `$PAYIN`/`$PAYOUT` move, in seconds (float). Valid range
+**0.05 – 10 s**. Returns the accepted value. With no argument, returns the current value
+without changing it.
+
+```
+→ $STEP,2\n
+← $RSP:2\r\n
+
+→ $STEP\n
+← $RSP:2\r\n
+```
+
+On out-of-range or non-numeric argument: `$RSP:ERR,RANGE_0.05_10\r\n`
+
+#### `$PAYIN`
+
+Wind in for one step, then stop. Returns `OK` if the move started, or an error otherwise.
+Re-checks the proximity switch first (as a manual jog-in does).
+
+```
+→ $PAYIN\n
+← $RSP:OK\r\n
+```
+
+| Error | Meaning |
+|-------|---------|
+| `ERR,BUSY` | A pay step is already running, or the system is not idle (`cycleFlag` ≠ `done`) |
+| `ERR,PROX_TRIPPED` | Proximity switch is tripped; move refused (also broadcasts `PROXTRIPPED,WARNING1`) |
+| `ERR,IO_ERROR` | Could not read the proximity switch |
+
+#### `$PAYOUT`
+
+Wind out for one step, then stop. Same behaviour as `$PAYIN` in the opposite direction; no
+proximity-switch check (paying out moves away from the switch).
+
+```
+→ $PAYOUT\n
+← $RSP:OK\r\n
+```
+
+| Error | Meaning |
+|-------|---------|
+| `ERR,BUSY` | A pay step is already running, or the system is not idle (`cycleFlag` ≠ `done`) |
+
+#### `$STOP`
+
+Stop any manual motion immediately and cancel a pay-step move that is in progress. Always
+returns `OK`.
+
+Note: `$STOP` stops **manual jog / pay motion** (equivalent to releasing a jog button); it does
+**not** abort a running cast. To abort a cast, use [`$ABORT`](#abort).
+
+```
+→ $STOP\n
+← $RSP:OK\r\n
+```
+
 ---
 
 ## Unsolicited Events
@@ -292,6 +378,10 @@ $EVT:CYCLEFLAG,done\r\n
 | `ERR,INVALID_DEPTH` | Depth argument for `$RUNCAST` is not a valid positive number ≤ 500 m |
 | `ERR,NOT_SAFE` | `$RUNCAST` rejected because the transfer point has not been set |
 | `ERR,UNKNOWN_PROFILER` | `$SETPROFILER` argument was not a recognised profiler ID |
+| `ERR,RANGE_0.05_10` | `$STEP` duration is outside the allowed range (0.05–10 s) or not a number |
+| `ERR,BUSY` | `$PAYIN`/`$PAYOUT` rejected: a pay step is already running or the system is not idle |
+| `ERR,PROX_TRIPPED` | `$PAYIN` rejected because the proximity switch is tripped |
+| `ERR,IO_ERROR` | `$PAYIN` could not read the proximity switch |
 
 ---
 
