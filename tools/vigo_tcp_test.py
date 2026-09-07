@@ -330,7 +330,7 @@ def test_status(client):
         _result('STATUS (raw, unparsed)', r)
         return
     for k in sorted(obj):
-        _result(k, obj[k])
+        _result(k, str(obj[k]))
 
 
 # ── Manual pay-in / pay-out ───────────────────────────────────────────────────
