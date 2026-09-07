@@ -34,7 +34,7 @@ transfer point via the web UI before issuing `$RUNCAST` commands over TCP.
 Immediately after the TCP connection is accepted the server sends a greeting line:
 
 ```
-VIGO 2026.04.29\r\n
+VIGO 2026.09.07\r\n
 ```
 
 The version string will reflect the currently installed server version. You can use this as a
