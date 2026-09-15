@@ -112,13 +112,15 @@ command individually.
 
 ```
 → $STATUS\n
-← $RSP:{"castType":"UNDERWAY","safeToCast":true,"profiler":"SWIFTSVP","stopMode":"TRANSFERPOINT","cycleFlag":"done","speedRpm":1000,"torquePct":2,"metersOut":12.7,"lastDepth":34.5,"powerW":150,"voltageV":230,"waterDepth":40,"cycles":3,"dropRate":1.1,"driveMode":"POSITION","driveStatus":"ENABLED","brake":"DISABLED","levelWind":"ENABLED","stepSeconds":1,"payStepBusy":false,"version":"2026.09.04"}\r\n
+← $RSP:{"castType":"UNDERWAY","safeToCast":true,"profiler":"SWIFTSVP","stopMode":"TRANSFERPOINT","cycleFlag":"done","speedRpm":1000,"torquePct":2,"metersOut":12.7,"lastDepth":34.5,"powerW":150,"voltageV":230,"waterDepth":40,"cycles":3,"dropRate":1.1,"driveMode":"POSITION","driveStatus":"ENABLED","brake":"DISABLED","levelWind":"ENABLED","stepSeconds":1,"payStepBusy":false,"allStop":false,"recovery":{"transferPoint":false,"limitSwitch":true},"version":"2026.09.15"}\r\n
 ```
 
 The JSON is always emitted on a single line (no embedded newlines), so the standard
 split-on-`\n` receive loop parses it as one message. Field meanings follow the individual
 `$QRY…` commands above; `stepSeconds` is the current pay-step duration and `payStepBusy` is
-`true` while a `$PAYIN`/`$PAYOUT` step is in progress.
+`true` while a `$PAYIN`/`$PAYOUT` step is in progress. `allStop` is `true` while an all stop is
+latched, and `recovery` says whether [`$RECOVER`](#recover) (`transferPoint`) and
+[`$RECOVERALL`](#recoverall) (`limitSwitch`) would currently be accepted.
 
 **Example**
 
@@ -232,6 +234,7 @@ Possible errors:
 |-------|---------|
 | `ERR,INVALID_DEPTH` | Depth is not a positive number or exceeds 500 m |
 | `ERR,NOT_SAFE` | Transfer point has not been set; casting is locked out |
+| `ERR,ALL_STOP` | All stop is active |
 
 ### `$ABORT`
 
@@ -244,23 +247,71 @@ Abort the current cast immediately. Safe to send at any stage; always returns `O
 
 ### `$RECOVER`
 
-Trigger an emergency recovery. Sends an immediate stop-and-wind command to the drive
-regardless of current cycle state. Always returns `OK`.
+Resume a wind-in that a servo drive fault interrupted, at creep speed, back to the transfer
+point. Only available after a drive fault during the recovery phase, once the fault has cleared
+(`recovery.transferPoint` in `$STATUS`). The drive's controller only resumes while its own
+recovery is still running, which is why this is not offered after an all stop.
 
 ```
 → $RECOVER\n
 ← $RSP:OK\r\n
 ```
 
+| Error | Meaning |
+|-------|---------|
+| `ERR,NOT_AVAILABLE` | No interrupted recovery to resume, or the drive is still in fault |
+| `ERR,ALL_STOP` | All stop is active |
+
 ### `$RECOVERALL`
 
-Wind the cable fully in until the proximity switch closes (only acts when `cycleFlag` is
-`done`). Always returns `OK`.
+Wind the cable in slowly until the proximity switch closes. Requires the system to be idle
+(`cycleFlag` is `done`) with no drive fault (`recovery.limitSwitch` in `$STATUS`). If an all stop
+is active, this clears it and starts the recovery.
 
 ```
 → $RECOVERALL\n
 ← $RSP:OK\r\n
 ```
+
+| Error | Meaning |
+|-------|---------|
+| `ERR,BUSY` | A cast is in progress (`cycleFlag` ≠ `done`) |
+| `ERR,DRIVE_FAULT` | The servo drive is in fault |
+| `ERR,ESTOP` | The physical e-stop is pressed |
+| `ERR,PROX_TRIPPED` | The proximity switch is already closed; move refused (also broadcasts `PROXTRIPPED,WARNING1`) |
+| `ERR,IO_ERROR` | Could not read the e-stop or proximity switch input |
+
+### `$ALLSTOP`
+
+Software all stop, the same as the ALL STOP button in the web interface. Stops the spool (brake
+on, speed and torque wipers to zero), ends any cast in progress, and latches. While latched the
+server refuses `$RUNCAST`, `$PAYIN`, `$PAYOUT` and `$RECOVER` with `ERR,ALL_STOP`, and blocks
+jogging, line loading and brake release. Clear it with [`$ALLSTOPRESET`](#allstopreset), or
+recover the payload with [`$RECOVERALL`](#recoverall). Always returns `OK`; sending it again while
+latched repeats the stop. Broadcasts `ALLSTOP,ACTIVE`.
+
+This is **not** a safety-rated stop: it depends on the network, the server and the drive
+controller all working. The physical e-stop remains the safety device.
+
+```
+→ $ALLSTOP\n
+← $RSP:OK\r\n
+```
+
+### `$ALLSTOPRESET`
+
+Clear the all stop. Nothing moves and the brake stays applied. Returns `OK`, including when no
+all stop is active. Broadcasts `ALLSTOP,CLEARED`.
+
+```
+→ $ALLSTOPRESET\n
+← $RSP:OK\r\n
+```
+
+| Error | Meaning |
+|-------|---------|
+| `ERR,ESTOP` | The physical e-stop is pressed |
+| `ERR,IO_ERROR` | Could not read the e-stop input |
 
 ### Manual pay-in / pay-out
 
@@ -303,6 +354,7 @@ Re-checks the proximity switch first (as a manual jog-in does).
 | `ERR,BUSY` | A pay step is already running, or the system is not idle (`cycleFlag` ≠ `done`) |
 | `ERR,PROX_TRIPPED` | Proximity switch is tripped; move refused (also broadcasts `PROXTRIPPED,WARNING1`) |
 | `ERR,IO_ERROR` | Could not read the proximity switch |
+| `ERR,ALL_STOP` | All stop is active |
 
 #### `$PAYOUT`
 
@@ -317,6 +369,7 @@ proximity-switch check (paying out moves away from the switch).
 | Error | Meaning |
 |-------|---------|
 | `ERR,BUSY` | A pay step is already running, or the system is not idle (`cycleFlag` ≠ `done`) |
+| `ERR,ALL_STOP` | All stop is active |
 
 #### `$STOP`
 
@@ -346,13 +399,15 @@ you are waiting for a command response.
 | `$EVT:CASTCOMPLETE` | — | The profiler has been recovered to the stop position |
 | `$EVT:CASTFAIL` | — | Cast aborted automatically (no line movement was detected during freefall) |
 | `$EVT:PROXTRIPPED,WARNING1` | — | Proximity switch tripped during a jog or manual move; motion stopped |
-| `$EVT:PROXTRIPPED,WARNING2` | — | Proximity switch tripped during recovery; profiler may need manual recovery |
+| `$EVT:PROXTRIPPED,WARNING2` | — | Proximity switch closed before the transfer point during recovery; the cast was completed at the switch and the transfer point recalibrated |
 | `$EVT:PROXTRIPPED,WARNING3` | — | Proximity switch tripped during a Bluetooth-retry jog |
 | `$EVT:TRANSFERSET,MANUAL` | — | Data-transfer position set manually via the web panel |
 | `$EVT:TRANSFERSET,AUTOMATIC` | — | Data-transfer position set by the auto-set routine |
 | `$EVT:TRANSFERSET,RESET` | — | Data-transfer position reset after a failed Bluetooth transfer |
 | `$EVT:ESTOP,HIGH` | — | E-stop button pressed |
 | `$EVT:ESTOP,LOW` | — | E-stop button released |
+| `$EVT:ALLSTOP,ACTIVE` | — | All stop latched (from the web interface or `$ALLSTOP`) |
+| `$EVT:ALLSTOP,CLEARED` | — | All stop cleared by a reset or by starting a recovery to the limit switch |
 | `$EVT:DRIVEFAULT,LOW` | — | Servo drive fault detected; drive will restart automatically after 7.5 s |
 | `$EVT:DRIVEFAULT,HIGH` | — | Servo drive fault cleared |
 
@@ -379,9 +434,13 @@ $EVT:CYCLEFLAG,done\r\n
 | `ERR,NOT_SAFE` | `$RUNCAST` rejected because the transfer point has not been set |
 | `ERR,UNKNOWN_PROFILER` | `$SETPROFILER` argument was not a recognised profiler ID |
 | `ERR,RANGE_0.05_10` | `$STEP` duration is outside the allowed range (0.05–10 s) or not a number |
-| `ERR,BUSY` | `$PAYIN`/`$PAYOUT` rejected: a pay step is already running or the system is not idle |
-| `ERR,PROX_TRIPPED` | `$PAYIN` rejected because the proximity switch is tripped |
-| `ERR,IO_ERROR` | `$PAYIN` could not read the proximity switch |
+| `ERR,BUSY` | `$PAYIN`/`$PAYOUT`/`$RECOVERALL` rejected: a pay step is already running or the system is not idle |
+| `ERR,PROX_TRIPPED` | `$PAYIN`/`$RECOVERALL` rejected because the proximity switch is tripped |
+| `ERR,IO_ERROR` | `$PAYIN`/`$RECOVERALL`/`$ALLSTOPRESET` could not read a safety input |
+| `ERR,ALL_STOP` | Rejected because all stop is active |
+| `ERR,ESTOP` | `$RECOVERALL`/`$ALLSTOPRESET` rejected because the physical e-stop is pressed |
+| `ERR,DRIVE_FAULT` | `$RECOVERALL` rejected because the servo drive is in fault |
+| `ERR,NOT_AVAILABLE` | `$RECOVER` rejected: no interrupted recovery to resume |
 
 ---
 
