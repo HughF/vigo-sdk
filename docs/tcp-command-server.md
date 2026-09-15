@@ -277,6 +277,7 @@ is active, this clears it and starts the recovery.
 |-------|---------|
 | `ERR,BUSY` | A cast is in progress (`cycleFlag` ≠ `done`) |
 | `ERR,DRIVE_FAULT` | The servo drive is in fault |
+| `ERR,LINE_LOAD` | Line-loading mode is on |
 | `ERR,ESTOP` | The physical e-stop is pressed |
 | `ERR,PROX_TRIPPED` | The proximity switch is already closed; move refused (also broadcasts `PROXTRIPPED,WARNING1`) |
 | `ERR,IO_ERROR` | Could not read the e-stop or proximity switch input |
@@ -440,6 +441,7 @@ $EVT:CYCLEFLAG,done\r\n
 | `ERR,ALL_STOP` | Rejected because all stop is active |
 | `ERR,ESTOP` | `$RECOVERALL`/`$ALLSTOPRESET` rejected because the physical e-stop is pressed |
 | `ERR,DRIVE_FAULT` | `$RECOVERALL` rejected because the servo drive is in fault |
+| `ERR,LINE_LOAD` | `$RECOVERALL` rejected because line-loading mode is on |
 | `ERR,NOT_AVAILABLE` | `$RECOVER` rejected: no interrupted recovery to resume |
 
 ---
