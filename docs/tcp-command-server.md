@@ -440,6 +440,7 @@ $EVT:CYCLEFLAG,done\r\n
 | `ERR,IO_ERROR` | `$PAYIN`/`$RECOVERALL`/`$ALLSTOPRESET` could not read a safety input |
 | `ERR,ALL_STOP` | Rejected because all stop is active |
 | `ERR,ESTOP` | `$RECOVERALL`/`$ALLSTOPRESET` rejected because the physical e-stop is pressed |
+| `ERR,PRU_LATCH` | `$RECOVERALL`/`$ALLSTOPRESET` rejected because the winch controller (PRU, firmware feature level 2) is still holding a stop: its e-stop latch has not cleared, or it did not answer within a second |
 | `ERR,DRIVE_FAULT` | `$RECOVERALL` rejected because the servo drive is in fault |
 | `ERR,LINE_LOAD` | `$RECOVERALL` rejected because line-loading mode is on |
 | `ERR,NOT_AVAILABLE` | `$RECOVER` rejected: no interrupted recovery to resume |
